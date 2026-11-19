@@ -19,6 +19,7 @@ WS_DISABLED = 0x08000000
 BS_PUSHBUTTON = 0
 WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_NOACTIVATE = 0x08000000
+WS_EX_TOPMOST = 0x00000008
 WM_COMMAND = 0x0111
 WM_DESTROY = 0x0002
 WM_CLOSE = 0x0010
@@ -56,9 +57,10 @@ class Win32TestWindow:
 
     _counter = 0
 
-    def __init__(self, buttons: list[tuple[int, str, bool]], x: int = 200, y: int = 200):
+    def __init__(self, buttons: list[tuple[int, str, bool]], x: int = 200, y: int = 200, topmost: bool = False):
         self.buttons = buttons
         self.pos = (x, y)
+        self.topmost = topmost
         self.clicked: list[int] = []
         self.hwnd = 0
         self._ready = threading.Event()
@@ -82,7 +84,7 @@ class Win32TestWindow:
         user32.RegisterClassW(ctypes.byref(wc))
         x, y = self.pos
         self.hwnd = user32.CreateWindowExW(
-            WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, self._class, "Gesture Control UIA test",
+            WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | (WS_EX_TOPMOST if self.topmost else 0), self._class, "Gesture Control UIA test",
             WS_OVERLAPPEDWINDOW | WS_VISIBLE, x, y, 520, 140, None, None, hinst, None,
         )
         for i, (bid, label, enabled) in enumerate(self.buttons):

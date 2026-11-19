@@ -42,6 +42,7 @@ class ControlKind(str, Enum):
     LINK = "link"
     SPLIT_BUTTON = "split_button"
     MENU_ITEM = "menu_item"
+    TEXT = "text"  # found by OCR on a screenshot; role unknown
     OTHER = "other"
 
 

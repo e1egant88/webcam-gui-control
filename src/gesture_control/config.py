@@ -136,6 +136,12 @@ class NavigationConfig:
     activation_method: str = "auto"
     # Put the mouse cursor back where it was after a click.
     restore_cursor: bool = True
+    # --- Screenshot + Windows OCR fallback (only when UIA sees nothing usable)
+    ocr_fallback: bool = True
+    # BCP-47 tag such as "en-US"; empty = your Windows display language.
+    ocr_language: str = ""
+    # Enlarge the screenshot before OCR; helps with small UI fonts.
+    ocr_scale: float = 1.5
 
 
 @dataclass
@@ -196,6 +202,8 @@ def validate(cfg: AppConfig) -> None:
         raise ValueError("navigation.mode must be 'uia', 'keys' or 'none'")
     if nav.activation_method not in ("auto", "invoke", "click"):
         raise ValueError("navigation.activation_method must be 'auto', 'invoke' or 'click'")
+    if not 0.5 <= nav.ocr_scale <= 4:
+        raise ValueError("navigation.ocr_scale must be between 0.5 and 4")
     if nav.search_timeout_s <= 0:
         raise ValueError("navigation.search_timeout_s must be positive")
     for key in ("next_keys", "previous_keys", "extra_next_names", "extra_previous_names", "blocked_words"):

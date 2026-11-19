@@ -21,3 +21,7 @@ class NavigationAttempt:
     detail: str
     method: str = ""  # "invoke" | "click" when ACTED
     target: str = ""
+    # True when the accessibility search saw nothing usable at all, so a
+    # screenshot (OCR) search is worth trying. False when it found controls
+    # but deliberately refused them (disabled, blocked, ambiguous).
+    visual_fallback_ok: bool = False

@@ -74,6 +74,11 @@ extra_previous_names = []    # e.g. ["zurück", "précédent"]
 search_timeout_s = 1.5
 activation_method = "auto"   # "auto" (Invoke, else click) | "invoke" | "click"
 restore_cursor = true        # move the mouse back after a click
+# Screenshot + Windows OCR fallback, used only when UI Automation finds nothing
+# relevant (apps without accessibility info). Local; nothing leaves the PC.
+ocr_fallback = true
+ocr_language = ""            # e.g. "en-US"; empty = Windows display language
+ocr_scale = 1.5              # enlarge before OCR; raise to 2.0 for tiny fonts
 
 [debug]
 show_window = true

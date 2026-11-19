@@ -58,6 +58,7 @@ KIND_BONUS = {
     ControlKind.SPLIT_BUTTON: 0,
     ControlKind.LINK: 0,
     ControlKind.MENU_ITEM: -10,
+    ControlKind.TEXT: -5,
     ControlKind.OTHER: -10,
 }
 PAIR_BONUS = 8

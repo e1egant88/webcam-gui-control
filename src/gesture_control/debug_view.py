@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import sys
 from collections import deque
 from dataclasses import dataclass
 
@@ -11,6 +13,8 @@ import numpy as np
 from .activation import ActivationState
 from .config import AppConfig
 from .types import HandObservation, MotionDiagnostics, Pose
+
+log = logging.getLogger(__name__)
 
 WINDOW = "Gesture Control (q quit, p pause)"
 
@@ -55,6 +59,20 @@ class DebugView:
                 cv2.setWindowProperty(WINDOW, cv2.WND_PROP_TOPMOST, 1)
             except cv2.error:
                 pass
+        self._exclude_from_capture()
+
+    @staticmethod
+    def _exclude_from_capture() -> None:
+        """Keep the debug window out of screenshots, so OCR never reads it."""
+        if sys.platform != "win32":
+            return
+        import ctypes
+
+        from .navigation.screen_windows import exclude_from_capture
+
+        hwnd = ctypes.windll.user32.FindWindowW(None, WINDOW)
+        if hwnd and not exclude_from_capture(hwnd):
+            log.debug("SetWindowDisplayAffinity failed; own-window masking still applies")
 
     def render(self, f: Frame) -> int:
         """Draw and show ``f``; return the pressed key (or -1)."""

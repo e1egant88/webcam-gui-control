@@ -6,6 +6,8 @@ Wave an open hand at your webcam to scroll, swipe left/right for previous/next.
 * **Phase 2:** left/right swipes find the real *Next*/*Previous* button or link
   in the foreground window with Windows UI Automation and press it. When no
   single clear target exists, they fall back to keys (default ←/→).
+* **Phase 3:** for apps that expose no accessibility info, a local
+  screenshot + Windows OCR fallback reads the window's visible labels.
 
 | Gesture (open palm) | Action |
 |---|---|
@@ -99,12 +101,38 @@ through Windows UI Automation (the accessibility API that screen readers use). I
 without touching anything. Run with `-v` to see every candidate's score and
 why each rejected control was rejected.
 
-**Limits:** apps without accessibility info (games, canvas-drawn UIs, some
-remote-desktop windows) yield no candidates and use the key fallback. Phase 3
-adds a screenshot-based fallback for these. Windows blocks a non-admin process
-from controlling admin windows. Chromium browsers turn on their accessibility
-tree when a UIA client first asks, so on rare occasions the very first swipe on
-a page falls back to keys.
+**Limits:** Windows blocks a non-admin process from controlling admin windows.
+Chromium browsers turn on their accessibility tree when a UIA client first
+asks, so on rare occasions the very first swipe on a page falls back to OCR or keys.
+
+### Screenshot + OCR fallback
+
+Some apps expose no usable accessibility info: games, canvas-drawn UIs, some
+remote-desktop and video windows. When UI Automation finds **no relevant
+control at all**, the worker:
+
+1. Captures the foreground window **from the screen**. Gesture Control's own
+   windows are blacked out first, and the debug window is also hidden from
+   capture, so OCR never reads its own status text.
+2. Runs **Windows' built-in OCR** (`Windows.Media.Ocr`). It's local, needs no
+   model download, and takes about 200 ms for a full-HD window. The image is
+   enlarged 1.5× first to help with small UI fonts.
+3. Splits each text line at wide gaps, so a pagination bar like
+   `Previous 1 2 3 Next` becomes separate labels. It then scores them with the
+   **same strict rules** as UIA, including the blocked words and the ambiguity check.
+4. Before clicking, it **re-checks**: it re-captures and re-reads the area
+   around the label, confirms the window under the click point is the target
+   window, and confirms the foreground window hasn't changed. Then it clicks
+   and puts your cursor back.
+
+OCR is **not** used when UIA found the control but refused it: when Next is
+disabled (last page), labelled with a blocked word, or ambiguous. Accessibility
+knows things a screenshot can't. OCR also can't tell whether a text label is
+greyed out, and it can't read icon-only arrows that have no text.
+
+OCR needs a Windows OCR language pack for your display language (English
+normally has one). Set `ocr_language = "en-US"` to choose one explicitly. Set
+`ocr_fallback = false` to turn this off.
 
 ## Using it well
 
@@ -136,6 +164,11 @@ live **UI Automation** test opens a real Win32 window with "‹ Previous",
 two, that Invoke really presses them, and that disabled, ambiguous, and
 expired-deadline cases do nothing. That test only ever presses buttons in its
 own window and never moves your mouse.
+
+The OCR tests read rendered pagination images: they check that prose and
+blocked labels are never chosen and that small fonts work with upscaling. A
+dry-run OCR test captures a real, briefly topmost Win32 window from the screen
+and finds its Next and Previous buttons, without clicking anything.
 
 ### Manual checklist with the camera (use `--dry-run`)
 | Check | Expected |
@@ -222,6 +255,11 @@ src/gesture_control/
     candidates.py   OS-independent description of a UI control
     scoring.py      pure Next/Previous target selection rules
     uia_windows.py  Windows UI Automation search, re-validation, Invoke/click
+    text_chunks.py  OCR words -> label candidates (pure)
+    screen_windows.py  window screen capture with own-window masking
+    ocr_windows.py  Windows.Media.Ocr wrapper
+    ocr_navigator.py   screenshot + OCR fallback with re-check and hit-test
+    chain.py        UIA first, OCR only when UIA saw nothing usable
     service.py      background worker, deadlines, key fallback
 tests/              pytest suite: synthetic trajectories, scoring rules,
                     and a live UIA test against a real Win32 window
@@ -234,5 +272,8 @@ a hotkey implementation, and Camera and Accessibility permissions.
 
 ## Roadmap
 - **Phase 2 (done):** UI Automation Next/Previous with key fallback.
-- **Phase 3:** OmniParser or a VLM screenshot fallback for inaccessible UIs.
+- **Phase 3 (done):** local screenshot + Windows OCR fallback. Not chosen yet:
+  OmniParser (catches icon-only arrows, but on CPU it takes seconds per swipe
+  and needs a large PyTorch download; its detector weights are AGPL), or a
+  cloud vision model (screen content leaves the machine).
 - **Phase 4:** PySide6 click-through overlay, settings UI, packaging, macOS adapter.

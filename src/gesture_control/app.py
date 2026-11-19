@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from pathlib import Path
 
@@ -26,6 +27,11 @@ class App:
 
     def run(self) -> int:
         cfg = self.cfg
+        if sys.platform == "win32":
+            # Physical-pixel coordinates for UIA, screenshots and clicks, also in dry-run.
+            from .controllers.windows import enable_dpi_awareness
+
+            enable_dpi_awareness()
         model_path = ensure_model(cfg.tracker, self.base_dir)
         controller = create_controller(cfg.dry_run)
         log.info("Desktop controller: %s", controller.name)

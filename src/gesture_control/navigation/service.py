@@ -181,8 +181,18 @@ def create_backend_factory(
 
         if sys.platform != "win32":
             raise NotImplementedError("UI Automation navigation is Windows-only for now")
+        from .chain import ChainNavigator
         from .uia_windows import UIANavigator
 
-        return UIANavigator(cfg, controller, dry_run=dry_run)
+        uia = UIANavigator(cfg, controller, dry_run=dry_run)
+        ocr = None
+        if cfg.ocr_fallback:
+            try:
+                from .ocr_navigator import OcrNavigator
+
+                ocr = OcrNavigator(cfg, controller, dry_run=dry_run)
+            except Exception as exc:  # missing language pack / winrt package
+                log.warning("OCR fallback disabled: %s", exc)
+        return ChainNavigator(uia, ocr)
 
     return factory

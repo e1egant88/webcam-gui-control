@@ -166,7 +166,7 @@ class ActionDispatcher:
         if self.nav_cfg.mode == "uia":
             assert self.navigation is not None
             if self.navigation.request(event.gesture):
-                return f"{event.gesture.value}: searching UI..."
+                return f"{event.gesture.value}: searching..."
             return f"{event.gesture.value}: ignored, previous search still running"
         combos = self._combos[event.gesture]
         for combo in combos:

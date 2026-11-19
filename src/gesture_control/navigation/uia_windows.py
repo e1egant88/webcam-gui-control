@@ -192,7 +192,11 @@ class UIANavigator:
             )
 
         t0 = time.monotonic()
-        candidates, window = self.find_candidates(hwnd)
+        try:
+            candidates, window = self.find_candidates(hwnd)
+        except comtypes.COMError as exc:
+            # The window doesn't expose UI Automation properly; let OCR try.
+            return NavigationAttempt(Outcome.ERROR, f"UIA unavailable for window: {exc}", visual_fallback_ok=True)
         elapsed = time.monotonic() - t0
         log.debug("UIA search: %d candidates in %.0f ms", len(candidates), elapsed * 1000)
         if time.monotonic() > deadline:
@@ -207,7 +211,11 @@ class UIANavigator:
             log.debug("  %3d %s [%s]", s.score, s.candidate.describe(), ", ".join(s.reasons))
         if sel.target is None:
             outcome = Outcome.AMBIGUOUS if sel.reason.startswith("ambiguous") else Outcome.NOT_FOUND
-            return NavigationAttempt(outcome, sel.reason)
+            # Only look at pixels when accessibility saw nothing relevant. If it
+            # found a Next that is disabled/blocked, OCR must not override that.
+            deliberate = any(why in ("disabled", "blocked word") for _, why in sel.rejected)
+            visual_ok = outcome is Outcome.NOT_FOUND and not sel.ranked and not deliberate
+            return NavigationAttempt(outcome, sel.reason, visual_fallback_ok=visual_ok)
 
         target = sel.target.candidate
         problem = self._revalidate(target, hwnd, explicit)

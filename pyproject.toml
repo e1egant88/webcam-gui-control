@@ -13,6 +13,13 @@ dependencies = [
     "opencv-python>=4.8",
     "numpy>=1.26",
     "comtypes>=1.4; sys_platform == 'win32'",
+    "mss>=9",
+    "winrt-Windows.Media.Ocr>=3; sys_platform == 'win32'",
+    "winrt-Windows.Graphics.Imaging>=3; sys_platform == 'win32'",
+    "winrt-Windows.Storage.Streams>=3; sys_platform == 'win32'",
+    "winrt-Windows.Foundation>=3; sys_platform == 'win32'",
+    "winrt-Windows.Foundation.Collections>=3; sys_platform == 'win32'",
+    "winrt-Windows.Globalization>=3; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
