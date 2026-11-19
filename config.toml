@@ -54,9 +54,26 @@ duration_s = 0.25
 high_resolution = true       # set false if an app ignores small wheel steps
 
 [navigation]
-mode = "keys"                # "keys" | "none" (Phase 2 adds UI Automation)
+# "uia":  find a real Next/Previous button/link in the foreground window and
+#         press it via Windows UI Automation (falls back to the keys below)
+# "keys": always send the keys below    "none": detect and log only
+mode = "uia"
+fallback_to_keys = true      # used when no single clear target is found
 next_keys = ["right"]        # e.g. ["alt+right"] for browser forward, ["pagedown"]
 previous_keys = ["left"]
+min_score = 60               # 100 = exact "Next", 70 = arrow-only "›", 60 = id-only
+ambiguity_margin = 15        # refuse if a *different* target scores this close
+include_back_forward = false # treat "Back"/"Forward" buttons as previous/next
+extra_next_names = []        # exact extra labels, e.g. ["weiter", "suivant"]
+extra_previous_names = []    # e.g. ["zurück", "précédent"]
+# Never activate controls containing these words (default list shown):
+# blocked_words = ["delete", "remove", "pay", "buy", "purchase", "order", "checkout",
+#   "submit", "send", "sign out", "signout", "log out", "logout", "uninstall", "erase",
+#   "format", "discard", "unsubscribe", "transfer", "confirm", "accept", "agree",
+#   "install", "reset", "close account"]
+search_timeout_s = 1.5
+activation_method = "auto"   # "auto" (Invoke, else click) | "invoke" | "click"
+restore_cursor = true        # move the mouse back after a click
 
 [debug]
 show_window = true

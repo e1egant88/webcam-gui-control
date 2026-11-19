@@ -6,11 +6,15 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .config import NavigationConfig, ScrollConfig
 from .controllers import DesktopController, parse_combo
 from .controllers.base import WHEEL_DELTA
 from .types import Gesture, GestureEvent
+
+if TYPE_CHECKING:
+    from .navigation.service import NavigationService
 
 log = logging.getLogger(__name__)
 
@@ -129,11 +133,15 @@ class ActionDispatcher:
         scroll_cfg: ScrollConfig,
         nav_cfg: NavigationConfig,
         scroller: SmoothScroller,
+        navigation: "NavigationService | None" = None,
     ):
         self.controller = controller
         self.scroll_cfg = scroll_cfg
         self.nav_cfg = nav_cfg
         self.scroller = scroller
+        self.navigation = navigation
+        if nav_cfg.mode == "uia" and navigation is None:
+            raise ValueError("navigation.mode = 'uia' needs a NavigationService")
         # Validate key combos at startup, not at the first swipe.
         self._combos = {
             Gesture.NEXT: [parse_combo(c) for c in nav_cfg.next_keys],
@@ -155,6 +163,11 @@ class ActionDispatcher:
 
         if self.nav_cfg.mode == "none":
             return f"{event.gesture.value} (navigation disabled)"
+        if self.nav_cfg.mode == "uia":
+            assert self.navigation is not None
+            if self.navigation.request(event.gesture):
+                return f"{event.gesture.value}: searching UI..."
+            return f"{event.gesture.value}: ignored, previous search still running"
         combos = self._combos[event.gesture]
         for combo in combos:
             self.controller.press_combo(combo)

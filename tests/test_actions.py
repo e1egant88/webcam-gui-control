@@ -75,6 +75,7 @@ def test_cancel_stops_scroll():
 
 
 def make_dispatcher(**nav):
+    nav.setdefault("mode", "keys")
     ctrl = DryRunController()
     scroll_cfg = ScrollConfig(smooth=False, notches_per_swipe=3, max_speed_multiplier=2.0)
     d = ActionDispatcher(ctrl, scroll_cfg, NavigationConfig(**nav), SmoothScroller(ctrl, scroll_cfg))

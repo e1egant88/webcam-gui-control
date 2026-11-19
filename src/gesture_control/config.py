@@ -102,15 +102,40 @@ class ScrollConfig:
     high_resolution: bool = True
 
 
+def _default_blocked_words() -> list[str]:
+    from .navigation.scoring import DEFAULT_BLOCKED_WORDS
+
+    return list(DEFAULT_BLOCKED_WORDS)
+
+
 @dataclass
 class NavigationConfig:
-    # Phase 1 interim behaviour for left/right swipes.
+    # What left/right swipes do:
+    #   "uia":  find a real Next/Previous control in the foreground window with
+    #           Windows UI Automation and invoke it (falls back to keys)
     #   "keys": send the key combos below to the foreground window
     #   "none": detect and log only
-    # Phase 2 will add "uia" (find real Next/Previous buttons).
-    mode: str = "keys"
+    mode: str = "uia"
+    fallback_to_keys: bool = True
     next_keys: list[str] = field(default_factory=lambda: ["right"])
     previous_keys: list[str] = field(default_factory=lambda: ["left"])
+    # --- UIA target selection
+    min_score: int = 60
+    # Reject when a *different* kind of target scores within this margin.
+    ambiguity_margin: int = 15
+    # Treat "Back"/"Forward" buttons (e.g. browser toolbar) as previous/next.
+    include_back_forward: bool = False
+    # Exact extra labels, e.g. other languages: ["weiter", "suivant"].
+    extra_next_names: list[str] = field(default_factory=list)
+    extra_previous_names: list[str] = field(default_factory=list)
+    # Never act on controls whose name contains one of these words.
+    blocked_words: list[str] = field(default_factory=_default_blocked_words)
+    # Give up (and fall back) if the search takes longer than this.
+    search_timeout_s: float = 1.5
+    # "auto": UIA Invoke if supported, else mouse click; "invoke"; "click".
+    activation_method: str = "auto"
+    # Put the mouse cursor back where it was after a click.
+    restore_cursor: bool = True
 
 
 @dataclass
@@ -166,8 +191,16 @@ def validate(cfg: AppConfig) -> None:
         raise ValueError("gestures.dominance_ratio must be >= 1")
     if cfg.activation.mode not in ("dwell", "always"):
         raise ValueError("activation.mode must be 'dwell' or 'always'")
-    if cfg.navigation.mode not in ("keys", "none"):
-        raise ValueError("navigation.mode must be 'keys' or 'none'")
+    nav = cfg.navigation
+    if nav.mode not in ("uia", "keys", "none"):
+        raise ValueError("navigation.mode must be 'uia', 'keys' or 'none'")
+    if nav.activation_method not in ("auto", "invoke", "click"):
+        raise ValueError("navigation.activation_method must be 'auto', 'invoke' or 'click'")
+    if nav.search_timeout_s <= 0:
+        raise ValueError("navigation.search_timeout_s must be positive")
+    for key in ("next_keys", "previous_keys", "extra_next_names", "extra_previous_names", "blocked_words"):
+        if not all(isinstance(v, str) for v in getattr(nav, key)):
+            raise ValueError(f"navigation.{key} must be a list of strings")
     if cfg.scroll.max_speed_multiplier < 1:
         raise ValueError("scroll.max_speed_multiplier must be >= 1")
 

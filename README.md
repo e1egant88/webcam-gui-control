@@ -1,16 +1,18 @@
 # Gesture Control — webcam hand gestures for your desktop
 
 Wave an open hand at your webcam to scroll, swipe left/right for previous/next.
-**Phase 1** (this code): Windows, robust gesture detection, smooth scrolling,
-arm/pause safety, debug view. Left/right currently sends configurable keys
-(default ←/→); Phase 2 will find real *Next/Previous* buttons with UI Automation.
+
+* **Phase 1:** Windows gesture detection, smooth scrolling, arm/pause safety, and a debug view.
+* **Phase 2:** left/right swipes find the real *Next*/*Previous* button or link
+  in the foreground window with Windows UI Automation and press it. When no
+  single clear target exists, they fall back to keys (default ←/→).
 
 | Gesture (open palm) | Action |
 |---|---|
 | Move down quickly | Scroll down |
 | Move up quickly | Scroll up |
-| Swipe right | Next (default: → key) |
-| Swipe left | Previous (default: ← key) |
+| Swipe right | Press the window's **Next** control (or → key) |
+| Swipe left | Press the window's **Previous** control (or ← key) |
 | Hold still ~0.6 s | **Arm** (start accepting gestures) |
 | Hold a fist ~0.4 s | **Disarm** |
 | `Ctrl+Alt+P` (anywhere) | Pause / resume (emergency stop) |
@@ -55,6 +57,55 @@ In the debug window: `q`/`Esc` quits, `p` pauses.
 * Windows does not let a normal process send input to apps running as
   administrator. Run this tool elevated only if you need that.
 
+## Next / Previous with UI Automation
+
+On a left/right swipe, a background worker reads the **foreground window**
+through Windows UI Automation (the accessibility API that screen readers use). It then:
+
+1. **Searches** for buttons, links, split buttons, and menu items whose name or id
+   contains `next`/`prev` or an arrow (`› » → ‹ « ←`). The filtering runs inside
+   UIA, so even large web pages take well under 100 ms.
+2. **Scores** each control with strict rules (see
+   [scoring.py](src/gesture_control/navigation/scoring.py)):
+
+   | Label | Score |
+   |---|---|
+   | `Next`, `Next ›`, `« Previous` | 100 |
+   | `Next page`, `Next slide`, `Prev chapter` | 90 |
+   | `Go to next page` | 85 |
+   | `›`, `»` (arrow only) | 70 |
+   | `Back` / `Forward` (only with `include_back_forward`) | 65 |
+   | unnamed control with id like `nextBtn` | 60 |
+
+   Labels like "Next steps for your career" or "Previous orders" are **rejected**,
+   because a keyword followed by an unknown word is usually a content link.
+   Buttons get +5, menu items −10. A control in the same row as its opposite
+   (a pagination bar) gets +8.
+3. **Refuses** controls that are disabled, off-screen, outside the window, or
+   labelled with a blocked word (`delete`, `pay`, `submit`, `sign out`, ...).
+   It also refuses when the scan is **ambiguous**: two *different* targets within
+   15 points, like "Next chapter" and "Next page". Identical duplicates, such as
+   pagination at the top and bottom, are fine. The one nearest the mouse cursor wins.
+4. **Re-validates** the target just before acting: same foreground window, same
+   name, still enabled and visible. Then it uses UIA **Invoke**, which needs no
+   mouse movement. If Invoke isn't supported, it clicks the control's centre,
+   but only if a hit-test confirms nothing covers it, and then puts your cursor back.
+5. If there's no clear target, the search times out (1.5 s), or UIA fails, it
+   presses the fallback keys instead. Each result is logged and shown in the
+   debug window, for example
+   `next => next: invoke 'Next ›' (link at 1766,397)  (93 ms)`.
+
+`--dry-run` runs the whole search and logs what it *would* invoke or click,
+without touching anything. Run with `-v` to see every candidate's score and
+why each rejected control was rejected.
+
+**Limits:** apps without accessibility info (games, canvas-drawn UIs, some
+remote-desktop windows) yield no candidates and use the key fallback. Phase 3
+adds a screenshot-based fallback for these. Windows blocks a non-admin process
+from controlling admin windows. Chromium browsers turn on their accessibility
+tree when a UIA client first asks, so on rare occasions the very first swipe on
+a page falls back to keys.
+
 ## Using it well
 
 1. Sit about 40–80 cm from the camera with your hand clearly in frame.
@@ -78,6 +129,14 @@ the hand entering the frame, return strokes, one long stroke firing only once,
 paddling, cooldowns, distance invariance, arming and disarming, smooth-scroll
 totals, and key/config parsing. No camera is needed.
 
+The navigation tests cover the scoring rules with synthetic controls and the
+background worker with a fake backend (fallback, timeouts, a stuck worker). A
+live **UI Automation** test opens a real Win32 window with "‹ Previous",
+"Next ›", and "Delete" buttons. It checks that the search finds only the first
+two, that Invoke really presses them, and that disabled, ambiguous, and
+expired-deadline cases do nothing. That test only ever presses buttons in its
+own window and never moves your mouse.
+
 ### Manual checklist with the camera (use `--dry-run`)
 | Check | Expected |
 |---|---|
@@ -90,6 +149,9 @@ totals, and key/config parsing. No camera is needed.
 | Wave slowly / hover | Nothing fires |
 | Hand out of view 2 s | `State: IDLE` |
 | `Ctrl+Alt+P` | `State: PAUSED`, then again → resumes (re-arm needed) |
+| Swipe right on a page with a "Next" link | Logs `would invoke 'Next ...'` |
+| Swipe right in Notepad | Logs `keys (not_found: no matching control)` |
+| Debug window focused, swipe right | Logs `skipped: ... own window has focus` |
 
 ### Camera mirroring
 `camera.mirror = true` (the default) flips the image like a mirror, so the
@@ -156,7 +218,13 @@ src/gesture_control/
     base.py         DesktopController interface + key-combo parsing
     windows.py      Windows SendInput adapter (ctypes)
     dryrun.py       logging-only controller
-tests/              pytest suite with synthetic trajectories
+  navigation/
+    candidates.py   OS-independent description of a UI control
+    scoring.py      pure Next/Previous target selection rules
+    uia_windows.py  Windows UI Automation search, re-validation, Invoke/click
+    service.py      background worker, deadlines, key fallback
+tests/              pytest suite: synthetic trajectories, scoring rules,
+                    and a live UIA test against a real Win32 window
 ```
 
 Only the camera, tracker, and debug window import OpenCV or MediaPipe. Only
@@ -165,7 +233,6 @@ Only the camera, tracker, and debug window import OpenCV or MediaPipe. Only
 a hotkey implementation, and Camera and Accessibility permissions.
 
 ## Roadmap
-- **Phase 2:** `navigation.mode = "uia"`. Use Windows UI Automation to find
-  Next/Previous buttons in the foreground window and invoke them, falling back to keys.
+- **Phase 2 (done):** UI Automation Next/Previous with key fallback.
 - **Phase 3:** OmniParser or a VLM screenshot fallback for inaccessible UIs.
 - **Phase 4:** PySide6 click-through overlay, settings UI, packaging, macOS adapter.

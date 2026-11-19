@@ -51,8 +51,8 @@ class DesktopController(ABC):
         """Press keys in order, then release them in reverse (e.g. ["alt", "left"])."""
 
     @abstractmethod
-    def click(self, x: int, y: int) -> None:
-        """Left-click at physical screen coordinates (used from Phase 2)."""
+    def click(self, x: int, y: int, restore_cursor: bool = False) -> None:
+        """Left-click at physical screen coordinates, optionally moving the cursor back."""
 
     def close(self) -> None:  # pragma: no cover - optional hook
         pass

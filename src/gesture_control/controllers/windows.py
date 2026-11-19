@@ -30,6 +30,10 @@ user32 = ctypes.WinDLL("user32", use_last_error=True)
 
 INPUT_MOUSE = 0
 INPUT_KEYBOARD = 1
+MOUSEEVENTF_MOVE = 0x0001
+MOUSEEVENTF_ABSOLUTE = 0x8000
+MOUSEEVENTF_VIRTUALDESK = 0x4000
+SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN = 76, 77, 78, 79
 MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
 MOUSEEVENTF_WHEEL = 0x0800
@@ -127,6 +131,24 @@ def _mouse(flags: int, data: int = 0) -> INPUT:
     return INPUT(type=INPUT_MOUSE, mi=MOUSEINPUT(0, 0, data & 0xFFFFFFFF, flags, 0, 0))
 
 
+def get_cursor_pos() -> tuple[int, int]:
+    pt = wintypes.POINT()
+    user32.GetCursorPos(ctypes.byref(pt))
+    return pt.x, pt.y
+
+
+def _move_abs(x: int, y: int) -> INPUT:
+    """Absolute move in physical pixels across the whole virtual desktop."""
+    vx = user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+    vy = user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+    vw = max(user32.GetSystemMetrics(SM_CXVIRTUALSCREEN), 2)
+    vh = max(user32.GetSystemMetrics(SM_CYVIRTUALSCREEN), 2)
+    nx = round((x - vx) * 65535 / (vw - 1))
+    ny = round((y - vy) * 65535 / (vh - 1))
+    flags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK
+    return INPUT(type=INPUT_MOUSE, mi=MOUSEINPUT(nx, ny, 0, flags, 0, 0))
+
+
 def _key(name: str, up: bool) -> INPUT:
     vk = VK[name]
     flags = KEYEVENTF_KEYUP if up else 0
@@ -152,8 +174,11 @@ class WindowsController(DesktopController):
             raise ValueError(f"No Windows virtual-key code for {unknown}")
         _send(*[_key(k, up=False) for k in keys], *[_key(k, up=True) for k in reversed(keys)])
 
-    def click(self, x: int, y: int) -> None:
-        if not user32.SetCursorPos(x, y):
-            log.warning("SetCursorPos(%d, %d) failed", x, y)
-            return
-        _send(_mouse(MOUSEEVENTF_LEFTDOWN), _mouse(MOUSEEVENTF_LEFTUP))
+    def click(self, x: int, y: int, restore_cursor: bool = False) -> None:
+        # Move, click and (optionally) move back in ONE SendInput batch so the
+        # events are applied in order; a separate SetCursorPos could race.
+        events = [_move_abs(x, y), _mouse(MOUSEEVENTF_LEFTDOWN), _mouse(MOUSEEVENTF_LEFTUP)]
+        if restore_cursor:
+            ox, oy = get_cursor_pos()
+            events.append(_move_abs(ox, oy))
+        _send(*events)

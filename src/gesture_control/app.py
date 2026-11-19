@@ -13,6 +13,7 @@ from .config import AppConfig
 from .controllers import create_controller
 from .gestures import GestureDetector
 from .hotkeys import GlobalHotkey
+from .navigation.service import NavigationService, create_backend_factory
 from .tracker import HandTracker, ensure_model
 
 log = logging.getLogger(__name__)
@@ -32,7 +33,11 @@ class App:
         detector = GestureDetector(cfg.gestures)
         activation = ActivationController(cfg.activation)
         scroller = SmoothScroller(controller, cfg.scroll).start()
-        dispatcher = ActionDispatcher(controller, cfg.scroll, cfg.navigation, scroller)
+        navigation = None
+        if cfg.navigation.mode == "uia":
+            factory = create_backend_factory(cfg.navigation, controller, cfg.dry_run)
+            navigation = NavigationService(cfg.navigation, controller, factory).start()
+        dispatcher = ActionDispatcher(controller, cfg.scroll, cfg.navigation, scroller, navigation)
 
         def on_hotkey() -> None:
             paused = activation.toggle_pause()
@@ -60,6 +65,8 @@ class App:
             tracker.close()
             hotkey.stop()
             scroller.stop()
+            if navigation is not None:
+                navigation.stop()
             controller.close()
             if view is not None:
                 view.close()
@@ -110,6 +117,11 @@ class App:
                     log.info("%-12s ignored, state=%s  (%s)", event.gesture.value, state.value, details)
                     last_action = f"({event.gesture.value} ignored: {state.value})"
                 last_action_t = t
+
+            if dispatcher.navigation is not None:
+                for res in dispatcher.navigation.poll():
+                    log.info("%-12s => %s  (%.0f ms)", res.gesture.value, res.describe(), res.elapsed * 1000)
+                    last_action, last_action_t = res.describe(), time.monotonic()
 
             if last_t is not None and t > last_t:
                 fps = 0.9 * fps + 0.1 * (1.0 / (t - last_t)) if fps else 1.0 / (t - last_t)

@@ -23,6 +23,6 @@ class DryRunController(DesktopController):
         self.calls.append(("keys", tuple(keys)))
         log.info("[dry-run] keys %s", "+".join(keys))
 
-    def click(self, x: int, y: int) -> None:
+    def click(self, x: int, y: int, restore_cursor: bool = False) -> None:
         self.calls.append(("click", x, y))
         log.info("[dry-run] click (%d, %d)", x, y)
