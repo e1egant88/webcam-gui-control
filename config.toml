@@ -1,0 +1,65 @@
+# Gesture Control configuration. Every key is optional; defaults are shown.
+# Distances are in "palm sizes" (wrist -> middle-finger knuckle), so they work
+# at any distance from the camera. Speeds are palm sizes per second.
+
+dry_run = false              # true = detect and log, never send input
+
+[camera]
+index = 0
+backend = "dshow"            # "dshow" | "msmf" | "any"
+width = 640
+height = 480
+fps = 30
+mirror = true                # preview behaves like a mirror (your right = screen right)
+
+[tracker]
+model_path = "models/hand_landmarker.task"
+auto_download_model = true
+min_detection_confidence = 0.6
+min_presence_confidence = 0.6
+min_tracking_confidence = 0.5
+finger_extension_ratio = 1.15
+open_palm_min_fingers = 4    # of index/middle/ring/pinky; lower to 3 if open palm flickers
+fist_max_fingers = 0
+
+[gestures]
+smoothing_alpha = 0.6        # 1.0 = raw, lower = smoother but laggier
+window_s = 0.35              # swipe must happen within this time
+min_distance_vertical = 1.0  # palm sizes
+min_distance_horizontal = 1.4
+min_speed = 3.0              # palm sizes / s
+dominance_ratio = 1.6        # main axis must be 1.6x the other axis
+min_samples = 4
+settle_s = 0.25              # ignore motion right after the hand appears / opens
+cooldown_vertical_s = 0.25
+cooldown_horizontal_s = 0.8
+return_suppress_s = 0.7      # ignore the opposite direction this long after an event
+invert_vertical = false      # true: hand down = scroll up
+invert_horizontal = false    # true: hand right = previous
+
+[activation]
+mode = "dwell"               # "dwell" (hold palm still to arm) | "always"
+arm_hold_s = 0.6
+still_speed = 0.6
+disarm_after_lost_s = 1.5
+fist_hold_s = 0.4            # hold a fist to disarm
+pause_hotkey = "ctrl+alt+p"  # global emergency pause toggle
+start_paused = false
+
+[scroll]
+notches_per_swipe = 3.0      # 1 notch = one mouse-wheel click
+max_speed_multiplier = 2.5   # fast swipes scroll up to 2.5x further
+smooth = true
+duration_s = 0.25
+high_resolution = true       # set false if an app ignores small wheel steps
+
+[navigation]
+mode = "keys"                # "keys" | "none" (Phase 2 adds UI Automation)
+next_keys = ["right"]        # e.g. ["alt+right"] for browser forward, ["pagedown"]
+previous_keys = ["left"]
+
+[debug]
+show_window = true
+window_always_on_top = true
+draw_landmarks = true
+trail_length = 20
