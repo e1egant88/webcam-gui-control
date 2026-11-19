@@ -45,13 +45,17 @@ class SmoothScroller:
     def __init__(self, controller: DesktopController, cfg: ScrollConfig):
         self.controller = controller
         self.cfg = cfg
-        self.granularity = HIGH_RES_GRANULARITY if cfg.high_resolution else WHEEL_DELTA
         self._lock = threading.Lock()
         self._anims: list[_Animation] = []
         self._residual = 0.0
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+
+    @property
+    def granularity(self) -> int:
+        # Read from config every time so the settings window applies live.
+        return HIGH_RES_GRANULARITY if self.cfg.high_resolution else WHEEL_DELTA
 
     def submit(self, wheel_delta: int, now: float | None = None) -> None:
         wheel_delta = int(round(wheel_delta / self.granularity)) * self.granularity

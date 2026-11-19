@@ -46,15 +46,20 @@ def qt_monitors():
 
 
 class OverlayController:
-    def __init__(self, engine: Engine, cfg: AppConfig, config_path: Path | None):
+    def __init__(
+        self, engine: Engine, cfg: AppConfig, config_path: Path | None, settings_path: Path | None = None
+    ):
         self.engine = engine
         self.cfg = cfg
         self.config_path = config_path
+        self.settings_path = settings_path
         self._lock = threading.Lock()
         self._latest: Snapshot | None = None
         self._stop = threading.Event()
         self._finished = threading.Event()
         self._failed = False
+        self.restart_requested = False
+        self._dialog = None
 
         self.hud = HudWindow(cfg.overlay)
         self.highlight = HighlightWindow()
@@ -62,9 +67,10 @@ class OverlayController:
             hotkey=cfg.activation.pause_hotkey,
             on_toggle_pause=engine.toggle_pause,
             on_toggle_hud=self.hud.setVisible,
-            on_toggle_camera=self.hud.set_show_camera,
+            on_toggle_camera=self._set_camera,
             on_open_config=self._open_config if config_path else None,
             on_quit=QApplication.quit,
+            on_settings=self.open_settings if settings_path else None,
             hud_visible=True,
             camera_visible=cfg.overlay.show_camera,
         )
@@ -121,6 +127,44 @@ class OverlayController:
         if geo is not None:
             self.highlight.show_at(*geo)
 
+    def _set_camera(self, on: bool) -> None:
+        self.cfg.overlay.show_camera = on
+        self.hud.set_show_camera(on)
+
+    def open_settings(self) -> None:
+        from ..config import load_base_config, load_config
+        from .settings_dialog import SettingsDialog
+
+        if self._dialog is not None and self._dialog.isVisible():
+            self._dialog.raise_()
+            self._dialog.activateWindow()
+            return
+        assert self.settings_path is not None
+        try:
+            base = load_base_config(self.config_path)
+            saved = load_config(self.config_path, self.settings_path)
+        except ValueError as exc:
+            self.tray.notify("Settings unavailable", f"config.toml is invalid: {exc}")
+            return
+        self._dialog = SettingsDialog(
+            self.cfg, base, saved, self.settings_path,
+            on_live_applied=self._settings_applied, on_restart=self.request_restart,
+        )
+        self._dialog.show()
+        self._dialog.raise_()
+        self._dialog.activateWindow()
+
+    def _settings_applied(self) -> None:
+        # Overlay values are read live, but the HUD caches size and position.
+        self.hud.set_show_camera(self.cfg.overlay.show_camera)
+        self.tray.camera_action.setChecked(self.cfg.overlay.show_camera)
+        self.hud.reposition()
+        self.hud.update()
+
+    def request_restart(self) -> None:
+        self.restart_requested = True
+        QApplication.quit()
+
     def _open_config(self) -> None:
         assert self.config_path is not None
         if sys.platform == "win32":
@@ -145,16 +189,23 @@ class OverlayController:
         self.timer.stop()
         self._stop.set()
         self._thread.join(timeout=3.0)
+        if self._dialog is not None:
+            self._dialog.close()
         self.tray.hide()
         self.hud.close()
         self.highlight.close()
 
 
-def run_overlay(engine: Engine, cfg: AppConfig, config_path: Path | None) -> int:
+RESTART_EXIT_CODE = 75
+
+
+def run_overlay(
+    engine: Engine, cfg: AppConfig, config_path: Path | None, settings_path: Path | None = None
+) -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("Gesture Control")
-    controller = OverlayController(engine, cfg, config_path)
+    controller = OverlayController(engine, cfg, config_path, settings_path)
     # Ctrl+C in the console: Qt's loop doesn't run Python signal handlers by
     # itself, but our 33 ms timer gives Python a chance to run this one.
     signal.signal(signal.SIGINT, lambda *_: QApplication.quit())
@@ -163,4 +214,6 @@ def run_overlay(engine: Engine, cfg: AppConfig, config_path: Path | None) -> int
         app.exec()
     finally:
         controller.shutdown()
+    if controller.restart_requested:
+        return RESTART_EXIT_CODE
     return 1 if controller._failed else 0

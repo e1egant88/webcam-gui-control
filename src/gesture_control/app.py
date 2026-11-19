@@ -28,10 +28,17 @@ def qt_available() -> bool:
 
 
 class App:
-    def __init__(self, cfg: AppConfig, base_dir: Path, config_path: Path | None = None):
+    def __init__(
+        self,
+        cfg: AppConfig,
+        base_dir: Path,
+        config_path: Path | None = None,
+        settings_path: Path | None = None,
+    ):
         self.cfg = cfg
         self.base_dir = base_dir
         self.config_path = config_path
+        self.settings_path = settings_path
 
     def run(self, headless: bool = False) -> int:
         cfg = self.cfg
@@ -46,7 +53,7 @@ class App:
             if use_qt:
                 from .overlay.qt_app import run_overlay
 
-                return run_overlay(engine, cfg, self.config_path)
+                return run_overlay(engine, cfg, self.config_path, self.settings_path)
             return self._run_opencv(engine, show_window=cfg.debug.show_window and not headless)
         except KeyboardInterrupt:
             log.info("Interrupted")

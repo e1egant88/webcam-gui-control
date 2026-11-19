@@ -10,6 +10,9 @@ from pathlib import Path
 
 from .config import load_config
 
+# Returned by the overlay when the user clicks "Restart now" in Settings.
+RESTART_EXIT_CODE = 75
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -17,6 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Control scrolling (and next/previous) with webcam hand gestures.",
     )
     p.add_argument("-c", "--config", default="config.toml", help="TOML config file (default: config.toml)")
+    p.add_argument("--no-user-settings", action="store_true",
+                   help="ignore settings saved from the Settings window")
     p.add_argument("--dry-run", action="store_true", help="detect gestures but only log actions")
     p.add_argument("--camera", type=int, help="camera index override")
     p.add_argument("--no-mirror", action="store_true", help="do not mirror the camera image")
@@ -28,20 +33,20 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+def run_once(args: argparse.Namespace) -> int:
     log = logging.getLogger("gesture_control")
     config_path = Path(args.config)
+    settings_path = None
+    if not args.no_user_settings:
+        from .settings_store import user_settings_path
+
+        settings_path = user_settings_path()
     try:
-        cfg = load_config(config_path)
+        cfg = load_config(config_path, settings_path)
     except (ValueError, OSError) as exc:
         log.error("Invalid configuration: %s", exc)
         return 2
+    # Command-line options override files for this run only (never saved).
     if args.dry_run:
         cfg.dry_run = True
     if args.camera is not None:
@@ -61,23 +66,37 @@ def main(argv: list[str] | None = None) -> int:
 
     base_dir = config_path.resolve().parent if config_path.exists() else Path.cwd()
 
-    if not args.verbose:
-        # Quieten MediaPipe / TFLite native INFO logging.
-        os.environ.setdefault("GLOG_minloglevel", "2")
-        os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-
     from .app import App  # heavy imports (mediapipe, cv2) only after arg parsing
     from .camera import CameraError
 
     try:
         resolved = config_path.resolve() if config_path.exists() else None
-        return App(cfg, base_dir, resolved).run(headless=args.headless)
+        return App(cfg, base_dir, resolved, settings_path).run(headless=args.headless)
     except CameraError as exc:
         log.error("%s", exc)
         return 1
     except (NotImplementedError, FileNotFoundError, ValueError) as exc:
         log.error("%s", exc)
         return 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    if not args.verbose:
+        # Quieten MediaPipe / TFLite native INFO logging.
+        os.environ.setdefault("GLOG_minloglevel", "2")
+        os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+
+    while True:
+        rc = run_once(args)
+        if rc != RESTART_EXIT_CODE:
+            return rc
+        logging.getLogger("gesture_control").info("Restarting with new settings...")
 
 
 if __name__ == "__main__":

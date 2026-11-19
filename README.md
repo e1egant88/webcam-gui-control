@@ -51,7 +51,27 @@ The first run downloads the MediaPipe hand model (~8 MB) to
 
 By default you get the **overlay**: a HUD in the bottom-right corner and a
 **tray icon**. Left-click the tray icon to pause or resume. Right-click it for
-the menu: pause, show/hide the overlay or camera, open the config file, quit.
+the menu: pause, show/hide the overlay or camera, **Settings...**, open
+config.toml, quit.
+
+### Settings window
+**Settings...** in the tray menu edits the common options in tabs: Gestures,
+Activation, Scrolling, Next / Previous, Overlay, and Camera. Hover over a
+label for an explanation.
+
+* **Live:** most values apply as soon as you click Apply or OK, which is handy
+  for tuning gesture sensitivity while you try it.
+* **Restart (⟳):** values marked ⟳ are read at start-up. The window then
+  offers **Restart now**, which restarts Gesture Control in place.
+* **Where it's saved:** only the values that differ from `config.toml` go into
+  your per-user file, `%APPDATA%\GestureControl\settings.toml`.
+  `config.toml` and its comments are never rewritten.
+* **Load order:** built-in defaults, then `config.toml`, then `settings.toml`,
+  then command-line options. Command-line options such as `--dry-run` apply to
+  that run only and are never saved.
+* **Undo:** **Restore Defaults** followed by Apply removes your overrides.
+  Start with `--no-user-settings` to ignore the file once. If the file is
+  invalid, it's ignored with a warning and the app still starts.
 
 Options:
 * `--debug-window` adds the OpenCV window with live tuning numbers
@@ -70,9 +90,8 @@ Options:
   your screen shares don't show it.
 * **Highlight placement:** the outline maps physical pixels to Qt coordinates
   per monitor, so it lands correctly on mixed-DPI setups.
-* **Settings:** `[overlay]` in [config.toml](config.toml) sets the corner,
-  opacity, and camera thumbnail. Settings are read at start-up, so restart
-  after editing.
+* **Settings:** the corner, opacity, and camera thumbnail are set in the
+  Settings window (live) or under `[overlay]` in [config.toml](config.toml).
 
 ### Where the input goes
 * **Scrolling** goes to the window **under the mouse cursor** (Windows'
@@ -204,6 +223,15 @@ They also check that the highlight lands within a few pixels of a given
 physical rectangle. The engine tests run synthetic hands through the whole
 pipeline (arming, scroll, keys, pause) without a camera.
 
+The settings tests cover:
+* the TOML writer round-trip (quotes, backslashes, non-ASCII);
+* the load order of the settings layers;
+* bad user files being ignored;
+* the schema matching the real config fields;
+* the Settings window itself: what applies live, what waits for a restart,
+  that invalid key combos are rejected, and that a `--dry-run` from the
+  command line is never saved.
+
 ### Manual checklist with the camera (use `--dry-run`)
 | Check | Expected |
 |---|---|
@@ -281,11 +309,14 @@ src/gesture_control/
   hotkeys.py        global pause hotkey (Win32 RegisterHotKey)
   debug_view.py     OpenCV debug window
   engine.py         UI-independent pipeline (one frame -> Snapshot + UI events)
+  settings_schema.py  what the Settings window shows (labels, ranges, live/restart)
+  settings_store.py   per-user settings file: location, TOML writer, diff
   app.py            picks the front end: overlay, OpenCV window, or headless
   overlay/
     qt_app.py       engine thread + Qt main loop
     widgets.py      HUD and target highlight (click-through, capture-excluded)
     tray.py         tray icon and menu
+    settings_dialog.py  Settings window (live apply, save, restart)
     geometry.py     physical -> logical coordinates per monitor (pure)
     win_styles.py   Win32 window styles, monitor list
   controllers/
@@ -317,7 +348,6 @@ a hotkey implementation, and Camera and Accessibility permissions.
   OmniParser (catches icon-only arrows, but on CPU it takes seconds per swipe
   and needs a large PyTorch download; its detector weights are AGPL), or a
   cloud vision model (screen content leaves the machine).
-- **Phase 4:** overlay, HUD, highlight, and tray are done. Still to do: a
-  settings dialog (today you edit `config.toml` and restart), packaging as a
-  single `.exe`, and the macOS adapter.
+- **Phase 4:** overlay, HUD, highlight, tray, and the Settings window are done.
+  Still to do: packaging as a Windows `.exe`, and the macOS adapter.
 - **Phase 4:** PySide6 click-through overlay, settings UI, packaging, macOS adapter.

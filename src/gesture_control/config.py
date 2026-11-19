@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 import tomllib
 from dataclasses import dataclass, field, fields, is_dataclass
@@ -231,8 +232,23 @@ def validate(cfg: AppConfig) -> None:
     if cfg.scroll.max_speed_multiplier < 1:
         raise ValueError("scroll.max_speed_multiplier must be >= 1")
 
+    from .controllers.base import parse_combo
+    from .hotkeys import parse_hotkey
 
-def load_config(path: str | Path | None) -> AppConfig:
+    for key in ("next_keys", "previous_keys"):
+        for combo in getattr(nav, key):
+            try:
+                parse_combo(combo)
+            except ValueError as exc:
+                raise ValueError(f"navigation.{key}: {exc}") from None
+    try:
+        parse_hotkey(cfg.activation.pause_hotkey)
+    except ValueError as exc:
+        raise ValueError(f"activation.pause_hotkey: {exc}") from None
+
+
+def load_base_config(path: str | Path | None) -> AppConfig:
+    """Defaults + the project config file (no per-user settings)."""
     cfg = AppConfig()
     if path is not None:
         p = Path(path)
@@ -243,4 +259,29 @@ def load_config(path: str | Path | None) -> AppConfig:
         else:
             log.info("Config file %s not found, using defaults", p)
     validate(cfg)
+    return cfg
+
+
+def apply_overrides(cfg: AppConfig, data: dict[str, Any]) -> AppConfig:
+    """Return a validated copy of ``cfg`` with ``data`` (nested dict) applied."""
+    out = copy.deepcopy(cfg)
+    _apply(out, data, "")
+    validate(out)
+    return out
+
+
+def load_config(path: str | Path | None, user_path: str | Path | None = None) -> AppConfig:
+    """Defaults, then ``path`` (config.toml), then ``user_path`` (settings saved from the UI).
+
+    A broken user settings file is ignored with a warning rather than
+    stopping the app; a broken config.toml is an error.
+    """
+    cfg = load_base_config(path)
+    if user_path is not None and Path(user_path).exists():
+        try:
+            with Path(user_path).open("rb") as fh:
+                cfg = apply_overrides(cfg, tomllib.load(fh))
+            log.info("Applied user settings from %s", user_path)
+        except (ValueError, tomllib.TOMLDecodeError, OSError) as exc:
+            log.warning("Ignoring user settings %s: %s", user_path, exc)
     return cfg

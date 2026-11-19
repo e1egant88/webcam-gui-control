@@ -42,6 +42,7 @@ class Tray:
         on_toggle_camera: Callable[[bool], None],
         on_open_config: Callable[[], None] | None,
         on_quit: Callable[[], None],
+        on_settings: Callable[[], None] | None = None,
         hud_visible: bool,
         camera_visible: bool,
     ):
@@ -70,10 +71,15 @@ class Tray:
         menu.addAction(self.camera_action)
         menu.addSeparator()
 
+        if on_settings is not None:
+            settings = QAction("Settings...", menu)
+            settings.triggered.connect(lambda _checked: on_settings())
+            menu.addAction(settings)
         if on_open_config is not None:
-            open_cfg = QAction("Open config file (restart to apply)", menu)
+            open_cfg = QAction("Open config.toml (restart to apply)", menu)
             open_cfg.triggered.connect(lambda _checked: on_open_config())
             menu.addAction(open_cfg)
+        if on_settings is not None or on_open_config is not None:
             menu.addSeparator()
 
         quit_action = QAction("Quit Gesture Control", menu)
