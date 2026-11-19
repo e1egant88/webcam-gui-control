@@ -54,6 +54,37 @@ By default you get the **overlay**: a HUD in the bottom-right corner and a
 the menu: pause, show/hide the overlay or camera, **Settings...**, open
 config.toml, quit.
 
+### Self-test
+```powershell
+python -m gesture_control --self-test
+```
+Checks the hand model, input, UI Automation, OCR, screen capture, the
+overlay, the camera, and the hotkey, without sending any input. It prints
+PASS / WARN / FAIL for each and exits non-zero if a required check fails. The
+camera and hotkey only warn, because another app may legitimately be using them.
+
+### Packaged Windows app
+```powershell
+pip install -e ".[dev,build]"
+.\packaging\build.ps1 -Zip
+```
+This produces `dist\GestureControl\` (and a `.zip`) that runs on Windows 10/11
+without Python. The build ends by running the packaged app's own self-test.
+* **`GestureControl.exe`** starts the tray and overlay with no console window.
+  Double-click it, or add a shortcut to `shell:startup` to run it at sign-in.
+* **`gesture-control-cli.exe`** is the same app with a console, for
+  `--self-test`, `--dry-run`, `-v`, and so on.
+* **Files next to the exe:** `config.toml` and `models\hand_landmarker.task`.
+  Your Settings-window changes still go to `%APPDATA%\GestureControl\settings.toml`.
+* **Logs:** `%APPDATA%\GestureControl\logs\gesture-control.log`. Errors such as
+  a missing camera appear in a message box.
+* **One copy at a time:** starting it again while it's running shows "already
+  running" instead of fighting over the camera and hotkey.
+
+The build bundles MediaPipe's native library, the UI Automation wrappers, the
+WinRT OCR bindings, and the Qt plugins. See
+[packaging/gesture_control.spec](packaging/gesture_control.spec).
+
 ### Settings window
 **Settings...** in the tray menu edits the common options in tabs: Gestures,
 Activation, Scrolling, Next / Previous, Overlay, and Camera. Hover over a
@@ -311,6 +342,11 @@ src/gesture_control/
   engine.py         UI-independent pipeline (one frame -> Snapshot + UI events)
   settings_schema.py  what the Settings window shows (labels, ranges, live/restart)
   settings_store.py   per-user settings file: location, TOML writer, diff
+  runtime.py        packaged-app paths, log file, single instance, error boxes
+  selftest.py       --self-test subsystem checks
+packaging/
+  build.ps1         one-command Windows build (+ self-test, optional zip)
+  gesture_control.spec  PyInstaller spec (GUI + CLI executables)
   app.py            picks the front end: overlay, OpenCV window, or headless
   overlay/
     qt_app.py       engine thread + Qt main loop
@@ -348,6 +384,6 @@ a hotkey implementation, and Camera and Accessibility permissions.
   OmniParser (catches icon-only arrows, but on CPU it takes seconds per swipe
   and needs a large PyTorch download; its detector weights are AGPL), or a
   cloud vision model (screen content leaves the machine).
-- **Phase 4:** overlay, HUD, highlight, tray, and the Settings window are done.
-  Still to do: packaging as a Windows `.exe`, and the macOS adapter.
+- **Phase 4:** overlay, HUD, highlight, tray, Settings window, and the
+  packaged Windows app are done. Still to do: the macOS adapter.
 - **Phase 4:** PySide6 click-through overlay, settings UI, packaging, macOS adapter.

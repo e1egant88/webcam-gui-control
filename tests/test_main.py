@@ -1,4 +1,20 @@
+import pytest
+
 from gesture_control import __main__ as entry
+
+
+@pytest.fixture(autouse=True)
+def isolated(monkeypatch):
+    # Don't take the real single-instance lock (the app may be running) and
+    # don't replace pytest's logging handlers.
+    monkeypatch.setattr(entry.SingleInstance, "acquire", lambda self: True)
+    monkeypatch.setattr(entry, "setup_logging", lambda verbose, log_file: None)
+
+
+def test_already_running(monkeypatch):
+    monkeypatch.setattr(entry.SingleInstance, "acquire", lambda self: False)
+    monkeypatch.setattr(entry, "run_once", lambda args: pytest.fail("must not run"))
+    assert entry.main([]) == entry.ALREADY_RUNNING_EXIT_CODE
 
 
 def test_restart_loop(monkeypatch):
