@@ -28,6 +28,10 @@ from .text_chunks import candidates_from_ocr
 
 log = logging.getLogger(__name__)
 
+
+def _tuple(r: Rect) -> tuple[int, int, int, int]:
+    return r.as_tuple()
+
 # Re-validation crop: this many label heights of padding around the target.
 REVALIDATE_PAD = 3
 # The re-found label centre must be within this many pixels of the original.
@@ -103,9 +107,9 @@ class OcrNavigator:
         if root_window_at(x, y) != hwnd:
             return NavigationAttempt(Outcome.NOT_FOUND, f"{label} is covered by another window")
         if self.dry_run:
-            return NavigationAttempt(Outcome.ACTED, label, "would click", target.describe())
+            return NavigationAttempt(Outcome.ACTED, label, "would click", target.describe(), rect=_tuple(target.rect))
         self.controller.click(x, y, restore_cursor=self.cfg.restore_cursor)
-        return NavigationAttempt(Outcome.ACTED, label, "ocr click", target.describe())
+        return NavigationAttempt(Outcome.ACTED, label, "ocr click", target.describe(), rect=_tuple(target.rect))
 
     def _revalidate(self, c: UICandidate, direction: Gesture, hwnd: int, explicit: bool, keep) -> str:
         from .screen_windows import clip, virtual_screen

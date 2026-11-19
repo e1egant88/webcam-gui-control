@@ -69,6 +69,10 @@ def window_pid(hwnd: int) -> int:
     return pid.value
 
 
+def _tuple(r: Rect) -> tuple[int, int, int, int]:
+    return r.as_tuple()
+
+
 def _rect(r) -> Rect:
     return Rect(int(r.left), int(r.top), int(r.right), int(r.bottom))
 
@@ -250,18 +254,18 @@ class UIANavigator:
             if not c.invokable:
                 return NavigationAttempt(Outcome.NOT_FOUND, f"{label} does not support Invoke")
             if self.dry_run:
-                return NavigationAttempt(Outcome.ACTED, label, "would invoke", c.describe())
+                return NavigationAttempt(Outcome.ACTED, label, "would invoke", c.describe(), rect=_tuple(c.rect))
             pattern = c.handle.GetCurrentPattern(self.UIA.UIA_InvokePatternId)
             pattern.QueryInterface(self.UIA.IUIAutomationInvokePattern).Invoke()
-            return NavigationAttempt(Outcome.ACTED, label, "invoke", c.describe())
+            return NavigationAttempt(Outcome.ACTED, label, "invoke", c.describe(), rect=_tuple(c.rect))
 
         x, y = _rect(c.handle.CurrentBoundingRectangle).center
         if not self._hit_test(c, x, y):
             return NavigationAttempt(Outcome.NOT_FOUND, f"{label} is covered at ({x},{y})")
         if self.dry_run:
-            return NavigationAttempt(Outcome.ACTED, label, "would click", c.describe())
+            return NavigationAttempt(Outcome.ACTED, label, "would click", c.describe(), rect=_tuple(c.rect))
         self.controller.click(x, y, restore_cursor=self.cfg.restore_cursor)
-        return NavigationAttempt(Outcome.ACTED, label, "click", c.describe())
+        return NavigationAttempt(Outcome.ACTED, label, "click", c.describe(), rect=_tuple(c.rect))
 
     def _hit_test(self, c: UICandidate, x: int, y: int) -> bool:
         """True if the element at (x, y) is the target or inside it."""

@@ -30,6 +30,9 @@ class Rect:
     def empty(self) -> bool:
         return self.width <= 0 or self.height <= 0
 
+    def as_tuple(self) -> tuple[int, int, int, int]:
+        return self.left, self.top, self.right, self.bottom
+
     def intersects(self, other: "Rect") -> bool:
         return (
             self.left < other.right and other.left < self.right

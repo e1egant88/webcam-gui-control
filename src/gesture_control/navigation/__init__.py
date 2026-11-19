@@ -25,3 +25,6 @@ class NavigationAttempt:
     # screenshot (OCR) search is worth trying. False when it found controls
     # but deliberately refused them (disabled, blocked, ambiguous).
     visual_fallback_ok: bool = False
+    # Screen rect (left, top, right, bottom; physical pixels) of the control
+    # that was activated, for the overlay highlight.
+    rect: tuple[int, int, int, int] | None = None

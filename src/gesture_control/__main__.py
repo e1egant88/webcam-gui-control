@@ -20,7 +20,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true", help="detect gestures but only log actions")
     p.add_argument("--camera", type=int, help="camera index override")
     p.add_argument("--no-mirror", action="store_true", help="do not mirror the camera image")
-    p.add_argument("--headless", action="store_true", help="no debug window")
+    p.add_argument("--headless", action="store_true", help="no overlay, tray or debug window (Ctrl+C quits)")
+    p.add_argument("--no-overlay", action="store_true", help="use the OpenCV debug window instead of the overlay")
+    p.add_argument("--debug-window", action="store_true", help="also show the OpenCV debug window")
     p.add_argument("--always-active", action="store_true", help="skip the dwell-to-arm step")
     p.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     return p
@@ -46,7 +48,13 @@ def main(argv: list[str] | None = None) -> int:
         cfg.camera.index = args.camera
     if args.no_mirror:
         cfg.camera.mirror = False
+    if args.no_overlay:
+        cfg.overlay.enabled = False
+        cfg.debug.show_window = True
+    if args.debug_window:
+        cfg.debug.show_window = True
     if args.headless:
+        cfg.overlay.enabled = False
         cfg.debug.show_window = False
     if args.always_active:
         cfg.activation.mode = "always"
@@ -62,7 +70,8 @@ def main(argv: list[str] | None = None) -> int:
     from .camera import CameraError
 
     try:
-        return App(cfg, base_dir).run()
+        resolved = config_path.resolve() if config_path.exists() else None
+        return App(cfg, base_dir, resolved).run(headless=args.headless)
     except CameraError as exc:
         log.error("%s", exc)
         return 1

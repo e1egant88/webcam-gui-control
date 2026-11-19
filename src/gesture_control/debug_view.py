@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 from collections import deque
 from dataclasses import dataclass
 
@@ -33,6 +34,24 @@ STATE_COLORS = {
     ActivationState.ARMING: (0, 200, 255),
     ActivationState.ACTIVE: (80, 200, 80),
 }
+
+
+POSE_COLORS = {Pose.OPEN_PALM: (80, 220, 80), Pose.FIST: (60, 60, 230)}
+
+
+def draw_hand(img: np.ndarray, obs: HandObservation, skeleton: bool = True, thickness: int = 1) -> tuple[int, int]:
+    """Draw the hand skeleton and palm centre onto ``img`` (BGR); return the centre pixel."""
+    h, w = img.shape[:2]
+    if skeleton and obs.landmarks:
+        pts = [(int(x * w), int(y * h)) for x, y in obs.landmarks]
+        for a, b in CONNECTIONS:
+            cv2.line(img, pts[a], pts[b], (200, 200, 200), thickness, cv2.LINE_AA)
+        for p in pts:
+            cv2.circle(img, p, 1 + thickness, (255, 255, 255), -1, cv2.LINE_AA)
+    # palm_x is aspect-corrected (frame-height units); convert back to pixels.
+    center = (int(obs.palm_x * h), int(obs.palm_y * h))
+    cv2.circle(img, center, 4 + 4 * thickness, POSE_COLORS.get(obs.pose, (0, 200, 255)), -1, cv2.LINE_AA)
+    return center
 
 
 @dataclass
@@ -74,28 +93,35 @@ class DebugView:
         if hwnd and not exclude_from_capture(hwnd):
             log.debug("SetWindowDisplayAffinity failed; own-window masking still applies")
 
+    def render_snapshot(self, snap) -> int:
+        """Render an ``engine.Snapshot``; return the pressed key (or -1)."""
+        if snap.image is None:
+            return cv2.waitKey(1) & 0xFF
+        return self.render(
+            Frame(
+                image=snap.image,
+                obs=snap.obs,
+                state=snap.state,
+                arming_progress=snap.arming_progress,
+                diag=snap.diag,
+                last_action=snap.last_action,
+                last_action_age=time.monotonic() - snap.last_action_time,
+                fps=snap.fps,
+                controller_name=snap.controller_name,
+            )
+        )
+
     def render(self, f: Frame) -> int:
         """Draw and show ``f``; return the pressed key (or -1)."""
         img = f.image.copy()
         h, w = img.shape[:2]
-        aspect = w / h
 
         if f.obs is not None:
-            if self.cfg.debug.draw_landmarks and f.obs.landmarks:
-                pts = [(int(x * w), int(y * h)) for x, y in f.obs.landmarks]
-                for a, b in CONNECTIONS:
-                    cv2.line(img, pts[a], pts[b], (200, 200, 200), 1, cv2.LINE_AA)
-                for p in pts:
-                    cv2.circle(img, p, 2, (255, 255, 255), -1, cv2.LINE_AA)
-            center = (int(f.obs.palm_x / aspect * w), int(f.obs.palm_y * h))
+            center = draw_hand(img, f.obs, self.cfg.debug.draw_landmarks)
             if f.obs.pose is Pose.OPEN_PALM:
                 self._trail.append(center)
             else:
                 self._trail.clear()
-            pose_color = {Pose.OPEN_PALM: (80, 220, 80), Pose.FIST: (60, 60, 230)}.get(
-                f.obs.pose, (0, 200, 255)
-            )
-            cv2.circle(img, center, 8, pose_color, -1, cv2.LINE_AA)
         else:
             self._trail.clear()
 

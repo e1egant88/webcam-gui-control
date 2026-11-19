@@ -145,8 +145,22 @@ class NavigationConfig:
 
 
 @dataclass
+class OverlayConfig:
+    # Click-through on-screen HUD + target highlight + tray icon (needs PySide6).
+    enabled: bool = True
+    corner: str = "bottom-right"  # bottom-right | bottom-left | top-right | top-left
+    show_camera: bool = True
+    opacity: float = 0.85
+    # Briefly outline the Next/Previous control that was pressed.
+    highlight_targets: bool = True
+    margin: int = 16
+
+
+@dataclass
 class DebugConfig:
-    show_window: bool = True
+    # The OpenCV debug window (camera + tuning numbers). Used automatically
+    # when the overlay is disabled or PySide6 is missing.
+    show_window: bool = False
     window_always_on_top: bool = True
     draw_landmarks: bool = True
     trail_length: int = 20
@@ -160,6 +174,7 @@ class AppConfig:
     activation: ActivationConfig = field(default_factory=ActivationConfig)
     scroll: ScrollConfig = field(default_factory=ScrollConfig)
     navigation: NavigationConfig = field(default_factory=NavigationConfig)
+    overlay: OverlayConfig = field(default_factory=OverlayConfig)
     debug: DebugConfig = field(default_factory=DebugConfig)
     dry_run: bool = False
 
@@ -202,6 +217,10 @@ def validate(cfg: AppConfig) -> None:
         raise ValueError("navigation.mode must be 'uia', 'keys' or 'none'")
     if nav.activation_method not in ("auto", "invoke", "click"):
         raise ValueError("navigation.activation_method must be 'auto', 'invoke' or 'click'")
+    if cfg.overlay.corner not in ("bottom-right", "bottom-left", "top-right", "top-left"):
+        raise ValueError("overlay.corner must be bottom-right, bottom-left, top-right or top-left")
+    if not 0.2 <= cfg.overlay.opacity <= 1:
+        raise ValueError("overlay.opacity must be between 0.2 and 1")
     if not 0.5 <= nav.ocr_scale <= 4:
         raise ValueError("navigation.ocr_scale must be between 0.5 and 4")
     if nav.search_timeout_s <= 0:

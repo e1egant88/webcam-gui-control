@@ -27,6 +27,7 @@ user32.IsWindowVisible.argtypes = (wintypes.HWND,)
 user32.IsIconic.argtypes = (wintypes.HWND,)
 user32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
 user32.SetWindowDisplayAffinity.argtypes = (wintypes.HWND, wintypes.DWORD)
+user32.GetWindowDisplayAffinity.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
 dwmapi.DwmGetWindowAttribute.argtypes = (wintypes.HWND, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD)
 EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
@@ -54,8 +55,17 @@ def clip(r: Rect, bounds: Rect) -> Rect:
     return Rect(max(r.left, bounds.left), max(r.top, bounds.top), min(r.right, bounds.right), min(r.bottom, bounds.bottom))
 
 
+def is_excluded_from_capture(hwnd: int) -> bool:
+    aff = wintypes.DWORD()
+    return bool(user32.GetWindowDisplayAffinity(hwnd, ctypes.byref(aff))) and aff.value == WDA_EXCLUDEFROMCAPTURE
+
+
 def own_window_rects() -> list[Rect]:
-    """Rectangles of this process's visible top-level windows."""
+    """Rectangles of this process's visible top-level windows that *would* appear in a capture.
+
+    Windows already excluded from capture (overlay, debug view) don't show up
+    in screenshots, so masking them would only hide what is underneath.
+    """
     pid = os.getpid()
     rects: list[Rect] = []
 
@@ -64,7 +74,7 @@ def own_window_rects() -> list[Rect]:
         if user32.IsWindowVisible(hwnd) and not user32.IsIconic(hwnd):
             p = wintypes.DWORD()
             user32.GetWindowThreadProcessId(hwnd, ctypes.byref(p))
-            if p.value == pid:
+            if p.value == pid and not is_excluded_from_capture(hwnd):
                 rects.append(window_rect(hwnd))
         return True
 

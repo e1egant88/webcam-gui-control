@@ -8,6 +8,9 @@ Wave an open hand at your webcam to scroll, swipe left/right for previous/next.
   single clear target exists, they fall back to keys (default ←/→).
 * **Phase 3:** for apps that expose no accessibility info, a local
   screenshot + Windows OCR fallback reads the window's visible labels.
+* **Phase 4 (overlay):** a small click-through HUD shows state, the camera with
+  your hand skeleton, and the last action. The control that was pressed gets a
+  brief outline. A tray icon handles pause, settings, and quit.
 
 | Gesture (open palm) | Action |
 |---|---|
@@ -46,16 +49,37 @@ python -m gesture_control
 The first run downloads the MediaPipe hand model (~8 MB) to
 `models/hand_landmarker.task`.
 
-Options: `--camera N`, `--no-mirror`, `--headless` (no debug window; quit with
-Ctrl+C), `--always-active` (skip arming), `-c other.toml`, `-v` (debug logs).
-In the debug window: `q`/`Esc` quits, `p` pauses.
+By default you get the **overlay**: a HUD in the bottom-right corner and a
+**tray icon**. Left-click the tray icon to pause or resume. Right-click it for
+the menu: pause, show/hide the overlay or camera, open the config file, quit.
+
+Options:
+* `--debug-window` adds the OpenCV window with live tuning numbers
+  (`q`/`Esc` quits, `p` pauses).
+* `--no-overlay` uses only that window.
+* `--headless` shows no UI at all; quit with Ctrl+C.
+* Also: `--camera N`, `--no-mirror`, `--always-active` (skip arming),
+  `-c other.toml`, and `-v` (debug logs).
+
+### The overlay
+* **Click-through and focus-free:** the HUD and the highlight never take
+  focus, and your mouse clicks and scrolls go straight through them to the
+  window underneath.
+* **Invisible to screenshots:** they are hidden from screen capture,
+  including screen sharing and OCR. So OCR reads the app *under* the HUD, and
+  your screen shares don't show it.
+* **Highlight placement:** the outline maps physical pixels to Qt coordinates
+  per monitor, so it lands correctly on mixed-DPI setups.
+* **Settings:** `[overlay]` in [config.toml](config.toml) sets the corner,
+  opacity, and camera thumbnail. Settings are read at start-up, so restart
+  after editing.
 
 ### Where the input goes
 * **Scrolling** goes to the window **under the mouse cursor** (Windows'
   *Scroll inactive windows when I hover over them* setting, which is on by default).
   Put the cursor over the page you want to scroll.
-* **Next/Previous keys** go to the **foreground** window. Click the target app
-  once after starting. The debug window stays on top but doesn't take focus.
+* **Next/Previous** acts on the **foreground** window. Click the target app
+  once after starting. The overlay and debug window never take focus.
 * Windows does not let a normal process send input to apps running as
   administrator. Run this tool elevated only if you need that.
 
@@ -170,6 +194,16 @@ blocked labels are never chosen and that small fonts work with upscaling. A
 dry-run OCR test captures a real, briefly topmost Win32 window from the screen
 and finds its Next and Previous buttons, without clicking anything.
 
+The overlay tests briefly show the real HUD on your desktop. They check that it:
+* is click-through, topmost, and never focused;
+* is hidden from screen capture: a white window underneath still captures white;
+* is not masked out of OCR;
+* is seen through by both Win32 and UI Automation hit-tests.
+
+They also check that the highlight lands within a few pixels of a given
+physical rectangle. The engine tests run synthetic hands through the whole
+pipeline (arming, scroll, keys, pause) without a camera.
+
 ### Manual checklist with the camera (use `--dry-run`)
 | Check | Expected |
 |---|---|
@@ -246,7 +280,14 @@ src/gesture_control/
   tracker.py        MediaPipe Hand Landmarker (Tasks API) wrapper
   hotkeys.py        global pause hotkey (Win32 RegisterHotKey)
   debug_view.py     OpenCV debug window
-  app.py            main loop
+  engine.py         UI-independent pipeline (one frame -> Snapshot + UI events)
+  app.py            picks the front end: overlay, OpenCV window, or headless
+  overlay/
+    qt_app.py       engine thread + Qt main loop
+    widgets.py      HUD and target highlight (click-through, capture-excluded)
+    tray.py         tray icon and menu
+    geometry.py     physical -> logical coordinates per monitor (pure)
+    win_styles.py   Win32 window styles, monitor list
   controllers/
     base.py         DesktopController interface + key-combo parsing
     windows.py      Windows SendInput adapter (ctypes)
@@ -276,4 +317,7 @@ a hotkey implementation, and Camera and Accessibility permissions.
   OmniParser (catches icon-only arrows, but on CPU it takes seconds per swipe
   and needs a large PyTorch download; its detector weights are AGPL), or a
   cloud vision model (screen content leaves the machine).
+- **Phase 4:** overlay, HUD, highlight, and tray are done. Still to do: a
+  settings dialog (today you edit `config.toml` and restart), packaging as a
+  single `.exe`, and the macOS adapter.
 - **Phase 4:** PySide6 click-through overlay, settings UI, packaging, macOS adapter.
