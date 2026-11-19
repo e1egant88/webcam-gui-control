@@ -142,6 +142,21 @@ class Engine:
     def paused(self) -> bool:
         return self.activation.paused
 
+    def _scroll_target_note(self) -> str:
+        """' -> app.exe' for the window under the cursor, which is where wheel input goes."""
+        from .targets import pointer_target
+
+        try:
+            target = pointer_target()
+        except Exception:  # never let diagnostics break scrolling
+            log.debug("pointer_target failed", exc_info=True)
+            return ""
+        if target is None:
+            return ""
+        if target.problem:
+            log.warning("Scroll went to %s", target.describe())
+        return f" -> {target.describe()}"
+
     def _set_action(self, text: str) -> None:
         self._last_action, self._last_action_t = text, time.monotonic()
 
@@ -167,6 +182,8 @@ class Engine:
                 except Exception:
                     log.exception("Action failed for %s", event.gesture.value)
                     desc = f"{event.gesture.value} FAILED"
+                if event.gesture.is_vertical:
+                    desc += self._scroll_target_note()
                 log.info("%-12s -> %s  (%s)", event.gesture.value, desc, details)
                 self._set_action(desc)
                 self.events.put(UiEvent(event.gesture, desc, acted=True))

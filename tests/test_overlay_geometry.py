@@ -1,5 +1,12 @@
 from gesture_control.navigation.candidates import Rect
-from gesture_control.overlay.geometry import Monitor, match_monitors, monitor_for, phys_to_logical
+from gesture_control.overlay.geometry import (
+    Monitor,
+    edge_rects,
+    match_monitors,
+    monitor_at,
+    monitor_for,
+    phys_to_logical,
+)
 
 # Left: 4K at 150% (physical 3840x2160, logical 2560x1440).
 # Right: 1080p at 100%, physically to the right of the 4K screen.
@@ -23,6 +30,24 @@ def test_rect_spanning_monitors_uses_centre():
 
 def test_off_screen_uses_nearest():
     assert monitor_for(Rect(6000, 10, 6100, 50), MONS) is RIGHT
+
+
+def test_monitor_at_point():
+    assert monitor_at(100, 100, MONS) is LEFT
+    assert monitor_at(3840, 0, MONS) is RIGHT  # first pixel of the right screen
+    assert monitor_at(3839, 2159, MONS) is LEFT  # last pixel of the left screen
+    assert monitor_at(9000, 500, MONS) is RIGHT  # off-screen -> nearest
+
+
+def test_edge_rects_frame_the_monitor():
+    top, bottom, left, right = edge_rects((2560, 0, 1920, 1080), 5)
+    assert top == (2560, 0, 1920, 5)
+    assert bottom == (2560, 1075, 1920, 5)
+    assert left == (2560, 5, 5, 1070)
+    assert right == (4475, 5, 5, 1070)
+    # Strips don't overlap and cover the whole border.
+    area = sum(w * h for _, _, w, h in (top, bottom, left, right))
+    assert area == 1920 * 1080 - (1920 - 10) * (1080 - 10)
 
 
 def test_no_monitors():

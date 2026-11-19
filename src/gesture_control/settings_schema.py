@@ -74,6 +74,7 @@ TABS: dict[str, list[Spec]] = {
         Spec("overlay", "show_camera", "Show camera"),
         Spec("overlay", "opacity", "Background opacity", "", 0.2, 1.0, 0.05, 2),
         Spec("overlay", "highlight_targets", "Outline pressed buttons"),
+        Spec("overlay", "target_frame", "Frame the target screen", "Light frame around the monitor that gestures act on: the one under the mouse cursor for scrolling, the focused window's for next/previous."),
     ],
     "Camera": [
         Spec("camera", "index", "Camera number", "0 = first camera.", 0, 10, 1, 0, live=False),

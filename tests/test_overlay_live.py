@@ -154,6 +154,42 @@ def test_highlight_lands_on_physical_rect(qapp):
     hl.close()
 
 
+def test_target_frame_on_every_monitor(qapp):
+    """The frame hugs each real monitor's edges, is click-through and invisible to capture."""
+    from gesture_control.navigation.screen_windows import is_excluded_from_capture, root_window_at, window_rect
+    from gesture_control.overlay.qt_app import qt_monitors
+    from gesture_control.overlay.widgets import FRAME_THICKNESS, TargetFrame
+    from gesture_control.overlay.win_styles import WS_EX_TRANSPARENT, ex_style
+
+    monitors = qt_monitors()
+    assert monitors, "no monitors found"
+    frame = TargetFrame()
+    try:
+        for m in monitors:
+            frame.set_monitor(m.logical)
+            frame.show()
+            frame.flash()
+            pump(qapp, 0.25)
+            top, bottom, left, right = (window_rect(e.hwnd) for e in frame.edges)
+            p = m.physical
+            tol = 2 + FRAME_THICKNESS  # DPI rounding
+            assert abs(top.left - p.left) <= 2 and abs(top.top - p.top) <= 2
+            assert abs(top.right - p.right) <= 2
+            assert abs(bottom.bottom - p.bottom) <= 2
+            assert abs(left.left - p.left) <= 2 and abs(right.right - p.right) <= 2
+            assert top.height <= tol and left.width <= tol
+            for e in frame.edges:
+                assert ex_style(e.hwnd) & WS_EX_TRANSPARENT
+                assert is_excluded_from_capture(e.hwnd)
+            # Clicks/hit-tests pass through the strip to whatever is underneath.
+            cx = (top.left + top.right) // 2
+            assert root_window_at(cx, top.top + 1) not in {e.hwnd for e in frame.edges}
+        frame.hide()
+        assert not frame.visible
+    finally:
+        frame.close()
+
+
 def test_hud_renders_states(qapp, hud):
     for state in ActivationState:
         hud.set_snapshot(snapshot(state))

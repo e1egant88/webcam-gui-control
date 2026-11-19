@@ -44,6 +44,25 @@ def monitor_for(rect: Rect, monitors: Sequence[Monitor]) -> Monitor | None:
     return min(monitors, key=lambda m: _distance2(m.physical, cx, cy))
 
 
+def monitor_at(x: int, y: int, monitors: Sequence[Monitor]) -> Monitor | None:
+    """Monitor containing physical point (x, y), or the nearest one."""
+    return monitor_for(Rect(x, y, x + 1, y + 1), monitors)
+
+
+def edge_rects(
+    geo: tuple[float, float, float, float], thickness: float
+) -> list[tuple[float, float, float, float]]:
+    """Four (x, y, w, h) strips forming a frame just inside ``geo``: top, bottom, left, right."""
+    x, y, w, h = geo
+    t = thickness
+    return [
+        (x, y, w, t),
+        (x, y + h - t, w, t),
+        (x, y + t, t, h - 2 * t),
+        (x + w - t, y + t, t, h - 2 * t),
+    ]
+
+
 def phys_to_logical(rect: Rect, monitors: Sequence[Monitor]) -> tuple[float, float, float, float] | None:
     """Return (x, y, w, h) in Qt logical coordinates, or None if no monitors."""
     m = monitor_for(rect, monitors)

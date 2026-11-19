@@ -154,6 +154,9 @@ class OverlayConfig:
     opacity: float = 0.85
     # Briefly outline the Next/Previous control that was pressed.
     highlight_targets: bool = True
+    # Light frame around the monitor gestures act on (the one under the mouse
+    # cursor for scrolling; the focused window's monitor for next/previous).
+    target_frame: bool = True
     margin: int = 16
 
 

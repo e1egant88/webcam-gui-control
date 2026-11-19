@@ -7,6 +7,7 @@ import os
 import signal
 import sys
 import threading
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, QUrl
@@ -19,11 +20,36 @@ from ..engine import Engine, Snapshot
 from ..navigation.candidates import Rect
 from .geometry import match_monitors, phys_to_logical
 from .tray import Tray
-from .widgets import HighlightWindow, HudWindow
+from .widgets import HighlightWindow, HudWindow, TargetFrame
 
 log = logging.getLogger(__name__)
 
 UI_INTERVAL_MS = 33
+# After a next/previous gesture, keep the frame on that window's monitor this long.
+NAV_FRAME_HOLD_S = 1.5
+
+
+def cursor_position() -> tuple[int, int]:
+    """Mouse cursor in physical pixels (where wheel input goes)."""
+    if sys.platform == "win32":
+        from ..controllers.windows import get_cursor_pos
+
+        return get_cursor_pos()
+    from PySide6.QtGui import QCursor
+
+    p = QCursor.pos()
+    return p.x(), p.y()
+
+
+def focused_window_rect() -> Rect | None:
+    """Physical rect of the foreground window (where next/previous act)."""
+    if sys.platform != "win32":
+        return None
+    from ..navigation.screen_windows import window_rect
+    from ..navigation.uia_windows import foreground_window
+
+    hwnd = foreground_window()
+    return window_rect(hwnd) if hwnd else None
 
 
 def qt_monitors():
@@ -63,6 +89,10 @@ class OverlayController:
 
         self.hud = HudWindow(cfg.overlay)
         self.highlight = HighlightWindow()
+        self.frame = TargetFrame()
+        self._monitor_cache = None
+        self._nav_monitor = None
+        self._nav_until = 0.0
         self.tray = Tray(
             hotkey=cfg.activation.pause_hotkey,
             on_toggle_pause=engine.toggle_pause,
@@ -117,13 +147,56 @@ class OverlayController:
         if snap is not None:
             self.hud.set_snapshot(snap)
             self.tray.set_state(snap.state, snap.last_action if snap.state is ActivationState.ACTIVE else "")
-        for ev in self.engine.drain_events():
+        events = self.engine.drain_events()
+        for ev in events:
             self.hud.flash(ev)
             if ev.rect is not None and self.cfg.overlay.highlight_targets:
                 self._highlight(Rect(*ev.rect))
+        self._update_frame(snap.state if snap else None, events)
+
+    # ------------------------------------------------------------ target frame
+    def _monitors(self):
+        """Monitor list, refreshed every 2 s (cheap, but not needed every frame)."""
+        now = time.monotonic()
+        if self._monitor_cache is None or now - self._monitor_cache[0] > 2.0:
+            self._monitor_cache = (now, qt_monitors())
+        return self._monitor_cache[1]
+
+    def _update_frame(self, state: ActivationState | None, events) -> None:
+        if not self.cfg.overlay.target_frame or state not in (ActivationState.ACTIVE, ActivationState.ARMING):
+            self.frame.hide()
+            return
+        monitors = self._monitors()
+        now = time.monotonic()
+        for ev in events:
+            if not ev.acted:
+                continue
+            if not ev.gesture.is_vertical:
+                # Next/previous act on the focused window: frame its monitor for a moment.
+                rect = Rect(*ev.rect) if ev.rect else focused_window_rect()
+                if rect is not None:
+                    from .geometry import monitor_for
+
+                    self._nav_monitor = monitor_for(rect, monitors)
+                    self._nav_until = now + NAV_FRAME_HOLD_S
+            self.frame.flash()
+        if now < self._nav_until and self._nav_monitor is not None:
+            monitor = self._nav_monitor
+        else:
+            # Scrolling goes to the window under the mouse cursor.
+            from .geometry import monitor_at
+
+            x, y = cursor_position()
+            monitor = monitor_at(x, y, monitors)
+        if monitor is None:
+            self.frame.hide()
+            return
+        self.frame.set_monitor(monitor.logical)
+        self.frame.set_level("normal" if state is ActivationState.ACTIVE else "dim")
+        self.frame.show()
 
     def _highlight(self, rect: Rect) -> None:
-        geo = phys_to_logical(rect, qt_monitors())
+        geo = phys_to_logical(rect, self._monitors())
         if geo is not None:
             self.highlight.show_at(*geo)
 
@@ -194,6 +267,7 @@ class OverlayController:
         self.tray.hide()
         self.hud.close()
         self.highlight.close()
+        self.frame.close()
 
 
 RESTART_EXIT_CODE = 75

@@ -127,9 +127,18 @@ Options:
 ### Where the input goes
 * **Scrolling** goes to the window **under the mouse cursor** (Windows'
   *Scroll inactive windows when I hover over them* setting, which is on by default).
-  Put the cursor over the page you want to scroll.
+  Put the cursor over the page you want to scroll. With several monitors, a
+  **light blue frame** marks the monitor that will receive gestures. It follows
+  the cursor and flashes when an action is sent. Turn it off with
+  *Frame the target screen* in Settings (Overlay tab).
+* **The HUD names the target app** for every scroll, e.g.
+  `scroll -3.0 notches -> chrome.exe`. It warns when the cursor is over the
+  desktop or taskbar (nothing to scroll), or over an app running as
+  administrator. Windows blocks gesture input to admin apps unless Gesture
+  Control also runs as administrator.
 * **Next/Previous** acts on the **foreground** window. Click the target app
-  once after starting. The overlay and debug window never take focus.
+  once after starting. The overlay and debug window never take focus. After a
+  left/right swipe, the frame jumps to that window's monitor for 1.5 s.
 * Windows does not let a normal process send input to apps running as
   administrator. Run this tool elevated only if you need that.
 
@@ -342,6 +351,7 @@ src/gesture_control/
   engine.py         UI-independent pipeline (one frame -> Snapshot + UI events)
   settings_schema.py  what the Settings window shows (labels, ranges, live/restart)
   settings_store.py   per-user settings file: location, TOML writer, diff
+  targets.py        which app is under the cursor (receives scrolls); admin/desktop checks
   runtime.py        packaged-app paths, log file, single instance, error boxes
   selftest.py       --self-test subsystem checks
 packaging/

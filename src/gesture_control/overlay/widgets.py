@@ -221,6 +221,112 @@ class HudWindow(OverlayWidget):
         QTimer.singleShot(30, self.update)
 
 
+FRAME_COLOR = QColor(150, 205, 255)  # light sky blue
+FRAME_THICKNESS = 5
+FRAME_ALPHA = {"dim": 0.35, "normal": 0.7}
+FRAME_FLASH_S = 0.7
+
+
+class _EdgeWindow(OverlayWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setWindowTitle("Gesture Control target frame")
+        self.alpha = 0.7
+        self.color = QColor(FRAME_COLOR)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        p = QPainter(self)
+        c = QColor(self.color)
+        c.setAlphaF(max(0.0, min(1.0, self.alpha)))
+        p.fillRect(self.rect(), c)
+        p.end()
+
+
+class TargetFrame:
+    """Light frame around the monitor that gestures will act on.
+
+    Four thin click-through strips along the monitor's edges (instead of one
+    full-screen window): cheap to draw, never cover the screen's content, and
+    hidden from screen capture like the rest of the overlay.
+    """
+
+    def __init__(self, thickness: int = FRAME_THICKNESS):
+        self.thickness = thickness
+        self.edges = [_EdgeWindow() for _ in range(4)]
+        self._geo: tuple[float, float, float, float] | None = None
+        self._level = "normal"
+        self._flash_t0 = -1.0
+        self._visible = False
+        self._timer = QTimer()
+        self._timer.setInterval(30)
+        self._timer.timeout.connect(self._animate)
+
+    @property
+    def geometry(self) -> tuple[float, float, float, float] | None:
+        return self._geo
+
+    def set_monitor(self, geo: tuple[float, float, float, float]) -> None:
+        if geo == self._geo:
+            return
+        from .geometry import edge_rects
+
+        self._geo = geo
+        for edge, (x, y, w, h) in zip(self.edges, edge_rects(geo, self.thickness)):
+            edge.setGeometry(int(round(x)), int(round(y)), max(int(round(w)), 1), max(int(round(h)), 1))
+
+    def set_level(self, level: str) -> None:
+        if level != self._level:
+            self._level = level
+            self._apply_alpha()
+
+    def flash(self) -> None:
+        self._flash_t0 = time.monotonic()
+        self._timer.start()
+        self._apply_alpha()
+
+    def _animate(self) -> None:
+        if time.monotonic() - self._flash_t0 > FRAME_FLASH_S:
+            self._timer.stop()
+        self._apply_alpha()
+
+    def _apply_alpha(self) -> None:
+        base = FRAME_ALPHA[self._level]
+        age = time.monotonic() - self._flash_t0
+        boost = max(0.0, 1 - age / FRAME_FLASH_S) if self._flash_t0 >= 0 else 0.0
+        color = QColor(FRAME_COLOR)
+        if boost > 0:  # flash: brighter and whiter, fading back
+            color = QColor(
+                int(FRAME_COLOR.red() + (255 - FRAME_COLOR.red()) * boost),
+                int(FRAME_COLOR.green() + (255 - FRAME_COLOR.green()) * boost),
+                255,
+            )
+        for e in self.edges:
+            e.alpha = base + (1 - base) * boost
+            e.color = color
+            e.update()
+
+    def show(self) -> None:
+        if not self._visible and self._geo is not None:
+            for e in self.edges:
+                e.show()
+            self._visible = True
+
+    def hide(self) -> None:
+        if self._visible:
+            for e in self.edges:
+                e.hide()
+            self._visible = False
+
+    @property
+    def visible(self) -> bool:
+        return self._visible
+
+    def close(self) -> None:
+        self._timer.stop()
+        for e in self.edges:
+            e.close()
+
+
 class HighlightWindow(OverlayWidget):
     """Briefly outlines the control that was activated."""
 

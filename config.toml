@@ -87,6 +87,7 @@ corner = "bottom-right"      # bottom-right | bottom-left | top-right | top-left
 show_camera = true           # camera thumbnail with hand skeleton in the HUD
 opacity = 0.85
 highlight_targets = true     # briefly outline the Next/Previous that was pressed
+target_frame = true          # light frame around the monitor gestures act on
 margin = 16
 
 [debug]
