@@ -336,6 +336,9 @@ Use these numbers to set thresholds from your own movements.
 
 ## Project layout
 
+For a diagram of how these parts connect (data flow, threads, main data
+types), see [docs/architecture.md](docs/architecture.md).
+
 ```
 src/gesture_control/
   types.py          data types (no OS / CV dependencies)
